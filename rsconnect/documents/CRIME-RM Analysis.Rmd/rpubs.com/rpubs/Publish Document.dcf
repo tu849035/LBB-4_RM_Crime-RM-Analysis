@@ -1,0 +1,11 @@
+name: Publish Document
+title:
+username:
+account: rpubs
+server: rpubs.com
+hostUrl: rpubs.com
+appId: https://api.rpubs.com/api/v1/document/949145/a14416099b7544a6aa88dc52154fe14b
+bundleId: https://api.rpubs.com/api/v1/document/949145/a14416099b7544a6aa88dc52154fe14b
+url: http://rpubs.com/tu849035/949145/edit
+when: 1664448602.40492
+lastSyncTime: 1664448602.40494
