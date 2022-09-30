@@ -1,0 +1,225 @@
+---
+title: "CRIME - Regression Model Analysis"
+author: "Tubagus Fathul Arifin"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+     toc: true
+     toc_depth: 5
+     toc_float: true
+     theme: readable
+     highlight: breezedark
+     df_print: paged
+---
+
+```{r echo=FALSE, out.width="100%"}
+knitr::include_graphics("assets/CRIME.jpg")
+```
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(dplyr)
+library(ggplot2)
+library(GGally)
+library(MLmetrics)
+library(lmtest)
+library(car)
+```
+# **1. DATA INTRODUCTION**  
+  
+On this occasion, we will analyze using a linear regression model on the data `crime.csv`.  
+
+We will explore the target variable `crime_rate` to be able to analyze how socio-demographic variables influence the crime rate in an area.  
+  
+## **1.1. Data Preparation**
+```{r}
+crime <- read.csv("crime.csv")
+head(crime)
+```
+As we can see in the data display above, the column names in the data are still in the form of codes. Therefore, we will change the column names to match the proper column names.
+```{r}
+crime <- crime %>% select(-X)
+names(crime) <- c("percent_m", "is_south", "mean_education", "police_exp60", "police_exp59", "labour_participation", "m_per1000f", "state_pop", "nonwhites_per1000", "unemploy_m24", "unemploy_m39", "gdp", "inequality", "prob_prison", "time_prison", "crime_rate")
+
+head(crime)
+```
+Check the data information.
+```{r}
+str(crime) 
+```
+  
+## **1.2. Data Preprocessing**  
+From the data information above, there is one variable that has a data type that does not match the data. Therefore, we will change the data type to match. And we will check if any data has missing values.
+```{r}
+crime <- crime %>% 
+  mutate(is_south = as.factor(is_south))
+
+str(crime)
+
+anyNA(crime)
+```
+  
+# **2. DATA ANALYSIS**  
+  
+## **2.1. Feature Selection**  
+Check the variable correlation.  
+```{r}
+ggcorr(crime, label = T, hjust = 1, layout.exp = 4)
+```
+The variables with a strong correlation with `crime_rate` are `police_exp59`(0.7) and `police_exp60` (0.7).  
+  
+## **2.2. Build The Regression Model**
+We will make several linear regression model to predict `crime_rate`. Based on the two most potential variables, based on the combination of the two most potential variables, and based on the combination of all the existing variables.
+```{r}
+crime_rate_RM_59 <- lm(crime_rate ~ police_exp59, crime)
+
+crime_rate_RM_60 <- lm(crime_rate ~ police_exp60, crime)
+
+crime_rate_RM_5960 <- lm(crime_rate ~ police_exp59 + police_exp60, crime)
+
+crime_rate_RM_all <- lm(crime_rate ~ ., crime)
+
+summary(crime_rate_RM_59)
+
+summary(crime_rate_RM_60)
+
+summary(crime_rate_RM_5960)
+
+summary(crime_rate_RM_all)
+```
+And We will also buil a step-wise regression forward model.
+```{r}
+# preparation : model without predictor
+crime_rate_none <- lm(crime_rate ~ 1, data = crime)
+
+# stepwise regression - forward
+crime_rate_sw <- step(object = crime_rate_none, scope = list(upper = crime_rate_RM_all), direction = "forward", trace = F)
+
+summary(crime_rate_sw)
+```
+  
+## **2.3. Model Evaluation**  
+We will compare the r-squared of each model that we have created.
+```{r}
+summary(crime_rate_RM_59)$r.squared
+
+summary(crime_rate_RM_60)$r.squared
+
+summary(crime_rate_RM_5960)$adj.r.squared
+
+summary(crime_rate_RM_all)$adj.r.squared
+
+summary(crime_rate_sw)$adj.r.squared
+```
+And now We will compare the RMSE of each model that we have created. And also W will use 98% Confidence Interval.
+```{r}
+pred_crime_rate_RM_59 <- predict(crime_rate_RM_59,
+                                 newdata = crime,
+                                 interval = "prediction",
+                                 level = 0.98)
+
+pred_crime_rate_RM_60 <- predict(crime_rate_RM_60,
+                                 newdata = crime,
+                                 interval = "prediction",
+                                 level = 0.98)
+
+pred_crime_rate_RM_5960 <- predict(crime_rate_RM_5960,
+                                   newdata = crime,
+                                   interval = "prediction",
+                                   level = 0.98)
+
+pred_crime_rate_RM_all <- predict(crime_rate_RM_all,
+                                  newdata = crime,
+                                  interval = "prediction",
+                                  level = 0.98)
+
+pred_crime_rate_sw <- predict(crime_rate_sw,
+                              newdata = crime,
+                              interval = "prediction",
+                              level = 0.98)
+
+# evaluation
+RMSE(pred_crime_rate_RM_59, crime$crime_rate)
+
+RMSE(pred_crime_rate_RM_60, crime$crime_rate)
+
+RMSE(pred_crime_rate_RM_5960, crime$crime_rate)
+
+RMSE(pred_crime_rate_RM_all, crime$crime_rate)
+
+RMSE(pred_crime_rate_sw, crime$crime_rate)
+```
+Based on the evaluation that We conduct above, for the r-squared & RMSE, the best model we can use is linear regression model with all predictor `(crime_rate_RM_all)`.  
+  
+# **3. MODEL VALIDATION**  
+  
+There are several **assumptions** applied by the model. It can be checked whether these assumptions are met to ensure the goodness of the model.
+  
+## **3.1. Normality of Residuals**  
+Histogram residual visualization.
+```{r}
+hist(crime_rate_RM_all$residuals)
+```
+Saphiro statistic test.
+```{r}
+shapiro.test(crime_rate_RM_all$residuals)
+```
+* `H0`: error/residual normally distributed  
+* `H1`: error/residual not normally distributed  
+  
+p-value >= 0.05 = accept H0  
+p-value < 0.05 = accept H1  
+  
+**Conclusion**: error/residual is normally distributed, assumption test is met.  
+  
+## **3.2. Homoscedasticity**  
+Scatterplot visualization.
+```{r}
+plot(x = crime_rate_RM_all$fitted.values, y = crime_rate_RM_all$residuals)
+abline(h = 0, col = "red")
+```
+Breusch-Pagan hypothesis statistic test.
+```{r}
+bptest(crime_rate_RM_all)
+```
+* H0: Error variance spreads constant (Homoscedasticity)
+* H1: Error variance spreads not constant/forms a pattern (Heteroscedasticity)  
+  
+p-value >= 0.05 = accept H0  
+p-value < 0.05 = accept H1  
+  
+**Conclusion**: Variance of error spreads constant (Homoscedasticity), assumption test is met.  
+  
+## **3.3. Multicollinearity**  
+VIF (Variance Inflation Factor) test.  
+```{r}
+vif(crime_rate_RM_all)
+```
+* VIF > 10 : multicollinearity
+* VIF < 10 : no multicollinearity  
+  
+**Conclusion**: Our model has multicollinearity, the assumption test is not met.  
+  
+# **4. MODEL INTERPRETATION & RECOMENDATION**  
+  
+From the normality of residuals, Homoscedasticity, and Multicolinearity test, our `crime_rate_RM_all` model only fail the assumption in the Multicolinearity test. Therefore, we will validate the second best model, namely `crime_rate_sw` model.
+```{r}
+#Normality of Residuals
+shapiro.test(crime_rate_sw$residuals)
+
+#Homoscadasticity
+bptest(crime_rate_sw)
+
+#Multicolinearity
+vif(crime_rate_sw)
+```
+From the three validation test above, our `crime_rate_sw` model has fail in the Homoscedasticity assumption.  
+  
+The risk of assumption test:  
+* Normality is not met: there is a large probability of error in our model (far from 0).  
+* Homoscedasticity is not met: there is a possibility of a large error in a certain range of values.  
+* Multicoll not met: less efficient.  
+  
+So, it can be concluded that our `crime_rate_RM_all` model is the best model because it can handle errors that may appear better despite the lack of efficiency than `crime_rate_sw` model.  
+  
+Based on the model that we have made, all predictor variables are very useful for predicting the target variable. In other words, all socio-demographic variables will influence the crime rate in an area.
